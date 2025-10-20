@@ -38,12 +38,12 @@ export default function Admin() {
 
       const result = await upsert({ tools: batch });
       alert(`Imported ${result?.count ?? batch.length} items. Go check the home page!`);
-    } catch (e: any) {
-      console.error(e);
-      alert(`Import failed: ${e?.message ?? String(e)}`);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: unknown) {
+     const msg = e instanceof Error ? e.message : "Import failed";
+  alert(msg);
+} finally {
+  setLoading(false);
+}
   }
 
   return (
