@@ -1,115 +1,171 @@
 // convex/tools.ts
-import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { query, mutation } from "./_generated/server";
 
-// 与 schema.ts 保持一致的字段定义
-const Tool = {
-  name: v.string(),
-  description: v.string(),
-  url: v.string(),
-  category: v.string(),
-  tags: v.array(v.string()),
-  pricing: v.union(v.literal("free"), v.literal("freemium"), v.literal("paid")),
-  image: v.optional(v.string()),
-};
+type Pricing = "free" | "freemium" | "paid";
 
-// 单条 upsert：按 url 去重
-export const add = mutation({
-  args: { ...Tool },
-  handler: async (ctx, args) => {
-    const now = Date.now();
+function normalizePricing(p?: string | null): Pricing | undefined {
+  if (!p) return undefined;
+  const s = String(p).toLowerCase();
+  if (s === "free" || s === "freemium" || s === "paid") return s as Pricing;
+  // 常见别名做归一化
+  if (["open-source", "opensource", "oss"].includes(s)) return "free";
+  if (["trial", "beta"].includes(s)) return "freemium";
+  return "freemium";
+}
 
-    // 不用索引，用 filter 精确匹配 url
-    const existed = await ctx.db
-      .query("tools")
-      .filter((q) => q.eq(q.field("url"), args.url))
-      .unique();
-
-    if (existed) {
-      await ctx.db.patch(existed._id, { ...args, updatedAt: now });
-      return existed._id;
-    }
-    return await ctx.db.insert("tools", { ...args, createdAt: now, updatedAt: now });
-  },
-});
-
-// 批量导入：就地 upsert（不在服务端再调用 mutation）
-export const upsertMany = mutation({
-  args: { tools: v.array(v.object(Tool)) },
-  handler: async (ctx, { tools }) => {
-    const now = Date.now();
-
-    for (const t of tools) {
-      const existed = await ctx.db
-        .query("tools")
-        .filter((q) => q.eq(q.field("url"), t.url))
-        .unique();
-
-      if (existed) {
-        await ctx.db.patch(existed._id, { ...t, updatedAt: now });
-      } else {
-        await ctx.db.insert("tools", { ...t, createdAt: now, updatedAt: now });
-      }
-    }
-    return { count: tools.length };
-  },
-});
-
-// 列表 + 搜索/筛选 + 分页（内存排序，先跑通）
+/**
+ * 列表查询：支持搜索 / 分类 / 标签 / 分页
+ * 页面上用法例子：
+ * useQuery(api.tools.list, { page, pageSize, search, category, tag })
+ */
 export const list = query({
   args: {
     search: v.optional(v.string()),
     category: v.optional(v.string()),
     tag: v.optional(v.string()),
-    page: v.optional(v.number()),
-    pageSize: v.optional(v.number()),
+    page: v.optional(v.number()),     // 1 基
+    pageSize: v.optional(v.number()), // 默认 6
   },
-  handler: async (ctx, { search, category, tag, page = 1, pageSize = 24 }) => {
-    const rows = await ctx.db.query("tools").collect();
+  handler: async (ctx, args) => {
+    const page = Math.max(1, args.page ?? 1);
+    const pageSize = Math.min(Math.max(1, args.pageSize ?? 6), 50);
 
-    // 按创建时间倒序（不依赖索引）
-    rows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+    const q = await ctx.db.query("tools").collect();
 
-    const s = (search ?? "").trim().toLowerCase();
-    const match = (str?: string) => (str ?? "").toLowerCase().includes(s);
+    // 过滤
+    const kw = (args.search ?? "").trim().toLowerCase();
+    const category = (args.category ?? "").trim();
+    const tag = (args.tag ?? "").trim();
 
-    const filtered = rows.filter((r) => {
-      const bySearch = s
-        ? match(r.name) || match(r.description) || (r.tags ?? []).some((x: string) => match(x))
-        : true;
-      const byCat = category ? r.category === category : true;
-      const byTag = tag ? r.tags.includes(tag) : true;
-      return bySearch && byCat && byTag;
+    let filtered = q.filter((t) => {
+      if (kw) {
+        const inName = t.name?.toLowerCase().includes(kw);
+        const inDesc = (t.description ?? "").toLowerCase().includes(kw);
+        if (!inName && !inDesc) return false;
+      }
+      if (category) {
+        if ((t.category ?? "") !== category) return false;
+      }
+      if (tag) {
+        const tags = t.tags ?? [];
+        if (!tags.includes(tag)) return false;
+      }
+      return true;
     });
 
+    // 简单排序：名称升序
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+
     const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const start = (page - 1) * pageSize;
-    const end = start + pageSize;
+    const items = filtered.slice(start, start + pageSize);
 
     return {
-      items: filtered.slice(start, end),
-      total,
+      items,
       page,
-      pageSize,
-      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      totalPages,
+      total,
     };
   },
 });
 
-// 分类列表
+/**
+ * 分类聚合：用于下拉框
+ * useQuery(api.tools.categories)
+ */
 export const categories = query({
   args: {},
   handler: async (ctx) => {
-    const rows = await ctx.db.query("tools").collect();
-    return Array.from(new Set(rows.map((r) => r.category))).sort();
+    const all = await ctx.db.query("tools").collect();
+    const set = new Set<string>();
+    for (const t of all) {
+      if (t.category && t.category.trim()) set.add(t.category.trim());
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
   },
 });
 
-// 标签列表
+/**
+ * 标签聚合：用于下拉框
+ * useQuery(api.tools.tags)
+ */
 export const tags = query({
   args: {},
   handler: async (ctx) => {
-    const rows = await ctx.db.query("tools").collect();
-    return Array.from(new Set(rows.flatMap((r) => r.tags))).sort();
+    const all = await ctx.db.query("tools").collect();
+    const set = new Set<string>();
+    for (const t of all) {
+      for (const tag of t.tags ?? []) {
+        const s = String(tag).trim();
+        if (s) set.add(s);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
   },
 });
+
+/**
+ * 批量导入/更新（按 url 去重），已做字段容错与分批
+ * admin 页面：useMutation(api.tools.upsertMany)
+ */
+export const upsertMany = mutation({
+  args: {
+    tools: v.array(
+      v.object({
+        name: v.string(),
+        description: v.optional(v.string()),
+        url: v.string(),
+        category: v.optional(v.string()),
+        tags: v.optional(v.array(v.string())),
+        pricing: v.optional(v.union(v.literal("free"), v.literal("freemium"), v.literal("paid"))),
+        image: v.optional(v.string()),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const chunkSize = 50; // 一批 50 条，避免超限
+    for (let i = 0; i < args.tools.length; i += chunkSize) {
+      const chunk = args.tools.slice(i, i + chunkSize);
+      for (const raw of chunk) {
+        const doc = {
+          name: raw.name,
+          description: raw.description ?? undefined,
+          url: raw.url,
+          category: raw.category ?? undefined,
+          tags: (raw.tags ?? []).map((t) => String(t)).filter(Boolean),
+          pricing: normalizePricing(raw.pricing),
+          image: raw.image ?? undefined,
+        };
+
+        // 以 url upsert（需在 schema 里有 by_url 索引）
+        const existing = await ctx.db
+          .query("tools")
+          .withIndex("by_url", (q) => q.eq("url", doc.url))
+          .first();
+
+        if (existing) {
+          await ctx.db.patch(existing._id, doc);
+        } else {
+          await ctx.db.insert("tools", doc);
+        }
+      }
+    }
+  },
+});
+
+/**
+ * 可选：清空全部数据（谨慎）
+ * 在管理端按需挂一个按钮调用即可
+ */
+export const clearAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("tools").collect();
+    for (const t of all) {
+      await ctx.db.delete(t._id);
+    }
+  },
+});
+
