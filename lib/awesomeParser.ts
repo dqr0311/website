@@ -9,53 +9,42 @@ export type ParsedTool = {
   image?: string;
 };
 
-/**
- * Parse markdown lines like:
- * - [Name](https://site.com) - description...
- * Uses latest ##/### heading as category.
- */
+const bulletRe =
+  /^\s*[-*]\s+\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\s*(?:[-–—]\s*(.+))?$/;
+
 export function parseAwesomeMarkdown(md: string): ParsedTool[] {
-  const lines = md.split("\n");
-  let currentCategory = "";
   const tools: ParsedTool[] = [];
+  const seen = new Set<string>();
+  let currentCategory = "";
 
-  const itemRegex =
-    /^\s*[-*+]\s+\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\s*(?:[-–—:]\s*)?(.*)$/;
+  const lines = md.split(/\r?\n/);
+  for (const raw of lines) {
+    const line = raw.trim();
 
-  for (const line of lines) {
-    const h = /^#{2,4}\s+(.+?)\s*$/.exec(line);
+    // ## / ### 标题作为 category
+    const h = /^(?:#{2,3})\s+(.+?)\s*$/.exec(line);
     if (h) {
       currentCategory = h[1].trim();
       continue;
     }
 
-    const m = itemRegex.exec(line);
-    if (m) {
-      const name = m[1].trim();
-      const url = m[2].trim();
-      const description = (m[3] ?? "").trim();
+    const m = bulletRe.exec(line);
+    if (!m) continue;
 
-      const low = description.toLowerCase();
-      const pricing: "free" | "freemium" | "paid" =
-        low.includes("free") ? "free" : low.includes("paid") ? "paid" : "freemium";
+    const [, name, url, descRaw] = m;
+    if (seen.has(url)) continue;
+    seen.add(url);
 
-      const tags: string[] = [];
-      if (currentCategory) tags.push(currentCategory);
-
-      tools.push({
-        name,
-        url,
-        description,
-        category: currentCategory || "Uncategorized",
-        tags,
-        pricing,
-      });
-    }
+    const description = (descRaw ?? "").trim();
+    tools.push({
+      name: name.trim(),
+      url: url.trim(),
+      description: description.length ? description : "No description.",
+      category: currentCategory || undefined,
+      // 下面两项 Awesome 列表通常没有显式标注，留空或使用你自定义策略
+      tags: undefined,
+      pricing: undefined,
+    });
   }
-
-  const seen = new Set<string>();
-  return tools.filter(t => (seen.has(t.url) ? false : (seen.add(t.url), true)));
+  return tools;
 }
-
-// 既导出具名，也导出默认，防止引入方式不一致造成的报错
-export default parseAwesomeMarkdown;
