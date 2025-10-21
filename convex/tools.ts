@@ -76,16 +76,23 @@ export const upsertMany = mutation({
   args: { items: v.array(v.any()) },
   handler: async (ctx, args) => {
     for (const raw of args.items) {
+      // Validate and normalize pricing
+      let pricing: "free" | "freemium" | "paid" = "free";
+      const rawPricing = String(raw?.pricing ?? "free").toLowerCase();
+      if (rawPricing === "paid" || rawPricing === "freemium") {
+        pricing = rawPricing as "paid" | "freemium";
+      }
+
       const t = {
         name: String(raw?.name ?? ""),
         description: String(raw?.description ?? ""),
         url: String(raw?.url ?? ""),
         category: String(raw?.category ?? "Uncategorized"),
         tags: Array.isArray(raw?.tags) ? raw.tags.filter(Boolean).map(String) : [],
-        pricing: String(raw?.pricing ?? "free"),
+        pricing,
         image: raw?.image ? String(raw.image) : undefined,
         createdAt: Date.now(),
-         updatedAt: Date.now()  
+        updatedAt: Date.now()
       };
       await ctx.db.insert("tools", t);
     }
