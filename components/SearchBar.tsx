@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 type Props = {
   categories: string[];
   tags: string[];
@@ -7,17 +9,37 @@ type Props = {
 };
 
 export default function SearchBar({ categories, tags, onChange }: Props) {
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [tag, setTag] = useState("");
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    onChange({ search: value, category, tag });
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategory(value);
+    onChange({ search, category: value, tag });
+  };
+
+  const handleTagChange = (value: string) => {
+    setTag(value);
+    onChange({ search, category, tag: value });
+  };
+
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
       <input
         placeholder="Search tool name or description"
         className="w-full sm:w-72 rounded-lg border px-3 py-2"
-        onChange={(e) => onChange({ search: e.target.value, category: "", tag: "" })}
+        value={search}
+        onChange={(e) => handleSearchChange(e.target.value)}
       />
       <select
         className="rounded-lg border px-3 py-2"
-        onChange={(e) => onChange({ search: "", category: e.target.value, tag: "" })}
-        defaultValue=""
+        value={category}
+        onChange={(e) => handleCategoryChange(e.target.value)}
       >
         <option value="">All categories</option>
         {categories.map((c) => (
@@ -26,8 +48,8 @@ export default function SearchBar({ categories, tags, onChange }: Props) {
       </select>
       <select
         className="rounded-lg border px-3 py-2"
-        onChange={(e) => onChange({ search: "", category: "", tag: e.target.value })}
-        defaultValue=""
+        value={tag}
+        onChange={(e) => handleTagChange(e.target.value)}
       >
         <option value="">All tags</option>
         {tags.map((t) => (

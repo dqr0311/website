@@ -84,7 +84,8 @@ export const upsertMany = mutation({
         tags: Array.isArray(raw?.tags) ? raw.tags.filter(Boolean).map(String) : [],
         pricing: String(raw?.pricing ?? "free"),
         image: raw?.image ? String(raw.image) : undefined,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+         updatedAt: Date.now()  
       };
       await ctx.db.insert("tools", t);
     }
