@@ -1,23 +1,81 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-// 组件在项目根的 components/ 目录
-import  SearchBar  from "../components/SearchBar";
-import  ToolCard  from "../components/ToolCard";
+import SearchBar from "../components/SearchBar";
+import ToolCard from "../components/ToolCard";
+
+type Tool = {
+  _id: string;
+  name: string;
+  description: string;
+  url: string;
+  tags: string[];
+  pricing: "free" | "freemium" | "paid";
+  image?: string;
+};
+
+type ToolsData = {
+  items: Tool[];
+  page: number;
+  totalPages: number;
+  categories: string[];
+  tags: string[];
+};
+
+const EMPTY_DATA: ToolsData = {
+  items: [],
+  page: 1,
+  totalPages: 1,
+  categories: [],
+  tags: [],
+};
 
 export default function Home() {
-  const categories = useQuery(api.tools.categories) ?? [];
-  const tags = useQuery(api.tools.tags) ?? [];
-
+  const convex = useMemo(
+    () => new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!),
+    []
+  );
   const [filters, setFilters] = useState({ search: "", category: "", tag: "" });
   const [page, setPage] = useState(1);
-
-  const data = useQuery(api.tools.list, { ...filters, page, pageSize: 24 });
+  const [data, setData] = useState<ToolsData | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => setPage(1), [filters]);
+
+  useEffect(() => {
+    let active = true;
+    setError("");
+
+    let timeoutId: number;
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error("Timed out loading tools")), 8000);
+    });
+
+    void Promise.race([
+      convex.query(api.tools.list, { ...filters, page, pageSize: 24 }),
+      timeout,
+    ])
+      .then((result) => {
+        if (!active) return;
+        window.clearTimeout(timeoutId);
+        setData(result);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        window.clearTimeout(timeoutId);
+        console.error("Failed to load tools", err);
+        setData(EMPTY_DATA);
+        setError("The catalog could not load data right now. Please try again later.");
+      });
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [convex, filters, page]);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
@@ -25,8 +83,18 @@ export default function Home() {
       <p className="mt-1 text-neutral-600">Search, filter, and discover useful AI tools.</p>
 
       <div className="mt-6">
-        <SearchBar categories={categories} tags={tags} onChange={setFilters} />
+        <SearchBar
+          categories={data?.categories ?? []}
+          tags={data?.tags ?? []}
+          onChange={setFilters}
+        />
       </div>
+
+      {error ? (
+        <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {error}
+        </p>
+      ) : null}
 
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {data?.items?.map((t) => (
@@ -41,6 +109,10 @@ export default function Home() {
           />
         ))}
       </div>
+
+      {data && data.items.length === 0 ? (
+        <p className="mt-8 text-center text-sm text-neutral-500">No tools found.</p>
+      ) : null}
 
       <div className="mt-8 flex items-center justify-center gap-2">
         <button
