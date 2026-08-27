@@ -1,182 +1,200 @@
 # AI Tools Directory
 
-一个简单的 AI 工具目录应用，基于 Next.js 和 Convex 构建。
+A simple AI tools directory built with Next.js and Convex.
 
-## ✨ 功能特性
+## Features
 
-- 🔍 搜索和过滤 AI 工具
-- 🏷️ 按分类和标签浏览
-- 📄 分页显示
-- 📊 从 GitHub Awesome 列表导入数据
-- 🎨 现代化 UI 设计
+- Search and filter AI tools
+- Browse by category and tag
+- Paginated results
+- Import data from GitHub Awesome lists
+- Modern responsive UI
 
-## 🚀 本地开发
+## Local Development
 
-### 前置要求
+### Requirements
 
-- Node.js 18+ 
-- npm 或 yarn
-- Convex 账号
+- Node.js 18+
+- npm or yarn
+- A Convex account
 
-### 安装步骤
+### Setup
 
-1. **克隆项目**
+1. **Clone the project**
+
    ```bash
    git clone <your-repo-url>
    cd ai-tools-dir
    ```
 
-2. **安装依赖**
+2. **Install dependencies**
+
    ```bash
    npm install
    ```
 
-3. **配置 Convex**
+3. **Configure Convex**
+
    ```bash
-   # 登录 Convex
    npx convex login
-   
-   # 启动 Convex 开发服务器（会自动创建 .env.local）
    npx convex dev
    ```
 
-4. **启动开发服务器**
-   
-   打开新终端窗口：
+   `npx convex dev` creates the local `.env.local` file automatically.
+
+4. **Start the development server**
+
+   Open a second terminal window:
+
    ```bash
    npm run dev
    ```
 
-5. **访问应用**
-   - 主页: http://localhost:3000
-   - 管理页面: http://localhost:3000/admin
+5. **Open the app**
 
-## 📦 部署到 Vercel
+   - Home page: http://localhost:3000
+   - Admin page: http://localhost:3000/admin
 
-详细的部署指南请查看 [DEPLOY.md](./DEPLOY.md)
+## Deploying To Vercel
 
-### 快速部署步骤
+See [DEPLOY.md](./DEPLOY.md) for the full deployment guide.
 
-1. **部署 Convex**
+### Quick Deploy
+
+1. **Deploy Convex**
+
    ```bash
    npx convex deploy
    ```
-   复制得到的 Convex URL
 
-2. **部署到 Vercel**
-   - 推送代码到 GitHub
-   - 在 Vercel 导入项目
-   - 添加环境变量 `NEXT_PUBLIC_CONVEX_URL`
-   - 点击部署
+   Copy the generated Convex URL.
 
-3. **导入数据**
-   - 访问 `https://your-site.vercel.app/admin`
-   - 点击 "Import Sample Data" 或 "Import from GitHub"
+2. **Deploy the app to Vercel**
 
-## 🛠️ 技术栈
+   - Push the code to GitHub.
+   - Import the project in Vercel.
+   - Add the `NEXT_PUBLIC_CONVEX_URL` environment variable.
+   - Deploy the project.
 
-- **前端**: Next.js 15 + React 19
-- **后端**: Convex
-- **样式**: Tailwind CSS 4
-- **语言**: TypeScript
-- **部署**: Vercel
+3. **Import data**
 
-## 📁 项目结构
+   - Visit `https://your-site.vercel.app/admin`.
+   - Click "Import Sample Data" or "Import from GitHub".
 
-```
+## Tech Stack
+
+- **Frontend**: Next.js 15 + React 19
+- **Backend**: Convex
+- **Styling**: Tailwind CSS 4
+- **Language**: TypeScript
+- **Deployment**: Vercel
+
+## Project Structure
+
+```text
 ai-tools-dir/
 ├── app/                    # Next.js App Router
-│   ├── admin/             # 管理页面
-│   ├── layout.tsx         # 根布局
-│   └── page.tsx           # 主页
-├── components/            # React 组件
-│   ├── SearchBar.tsx      # 搜索栏
-│   └── ToolCard.tsx       # 工具卡片
-├── convex/                # Convex 后端
-│   ├── schema.ts          # 数据库模式
-│   └── tools.ts           # API 函数
-├── lib/                   # 工具函数
-│   ├── awesomeParser.ts   # Markdown 解析器
-│   └── sampleData.ts      # 示例数据
-└── public/                # 静态资源
+│   ├── admin/              # Admin page
+│   ├── layout.tsx          # Root layout
+│   └── page.tsx            # Home page
+├── components/             # React components
+│   ├── SearchBar.tsx       # Search controls
+│   └── ToolCard.tsx        # Tool cards
+├── convex/                 # Convex backend
+│   ├── schema.ts           # Database schema
+│   └── tools.ts            # API functions
+├── lib/                    # Utilities
+│   ├── awesomeParser.ts    # Markdown parser
+│   └── sampleData.ts       # Sample data
+└── public/                 # Static assets
 ```
 
-## 🎯 使用指南
+## Usage
 
-### 导入示例数据
+### Import Sample Data
 
-访问 `/admin` 页面，点击 "Import Sample Data" 按钮。
+Visit `/admin` and click "Import Sample Data".
 
-### 从 GitHub 导入
+### Import From GitHub
 
-1. 访问 `/admin` 页面
-2. 输入 GitHub Awesome 列表的 raw URL
-3. 默认: `https://raw.githubusercontent.com/mahseema/awesome-ai-tools/main/README.md`
-4. 点击 "Import from GitHub"
+1. Visit `/admin`.
+2. Enter the raw URL for a GitHub Awesome list.
+3. The default source is `https://raw.githubusercontent.com/mahseema/awesome-ai-tools/main/README.md`.
+4. Click "Import from GitHub".
 
-### 搜索和过滤
+### Search And Filter
 
-- 在搜索框输入关键词
-- 选择分类下拉菜单
-- 选择标签下拉菜单
-- 可以组合使用多个过滤条件
+- Enter keywords in the search box.
+- Select a category.
+- Select a tag.
+- Combine filters as needed.
 
-## 🐛 常见问题
+## Troubleshooting
 
-### 问题：importFromGithub 显示错误
+### `importFromGithub` shows an error
 
-**原因**：环境变量未配置或 Convex 未正确部署
+**Cause**: The environment variables are missing or Convex is not deployed correctly.
 
-**解决**：
-1. 检查 `.env.local` 文件是否存在
-2. 确认 `NEXT_PUBLIC_CONVEX_URL` 配置正确
-3. 运行 `npx convex dev` 确保 Convex 正常运行
+**Fix**:
 
-### 问题：图片不显示
+1. Check that `.env.local` exists.
+2. Confirm that `NEXT_PUBLIC_CONVEX_URL` is set correctly.
+3. Run `npx convex dev` and verify that Convex is healthy.
 
-**原因**：Next.js Image 需要配置远程图片域名
+### Images do not display
 
-**解决**：已在 `next.config.ts` 中配置，允许所有 HTTPS 图片
+**Cause**: Next.js Image requires remote image domains to be configured.
 
-### 问题：Vercel 部署失败
+**Fix**: `next.config.ts` allows HTTPS images.
 
-**原因**：环境变量未设置
+### Vercel deployment fails
 
-**解决**：
-1. 在 Vercel 项目设置中添加 `NEXT_PUBLIC_CONVEX_URL`
-2. 使用生产环境的 Convex URL（通过 `npx convex deploy` 获取）
+**Cause**: The required environment variable is missing.
 
-## 📝 开发说明
+**Fix**:
 
-### 数据库模式
+1. Add `NEXT_PUBLIC_CONVEX_URL` in the Vercel project settings.
+2. Use the production Convex URL from `npx convex deploy`.
+
+### The home page shows a client-side application error
+
+**Cause**: Production data may contain older tool documents with missing or malformed fields.
+
+**Fix**: The Convex schema accepts legacy records, and the query layer normalizes them before sending data to the UI.
+
+## Data Model
+
+Newly imported tools use this normalized shape:
 
 ```typescript
 tools: {
-  name: string;           // 工具名称
-  description: string;    // 描述
-  url: string;           // 网址
-  category: string;      // 分类
-  tags: string[];        // 标签
-  pricing: "free" | "freemium" | "paid";  // 定价
-  image?: string;        // 图片 URL
-  createdAt: number;     // 创建时间
-  updatedAt: number;     // 更新时间
+  name: string;
+  description: string;
+  url: string;
+  category: string;
+  tags: string[];
+  pricing: "free" | "freemium" | "paid";
+  image?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 ```
 
-### API 端点
+The schema is intentionally tolerant so existing production records can still be read and normalized safely.
 
-- `api.tools.list` - 获取工具列表（支持搜索、过滤、分页）
-- `api.tools.categories` - 获取所有分类
-- `api.tools.tags` - 获取所有标签
-- `api.tools.upsertMany` - 批量导入工具
+## API
 
-## 📄 License
+- `api.tools.list` - Get tools with search, filtering, and pagination.
+- `api.tools.categories` - Get all categories.
+- `api.tools.tags` - Get all tags.
+- `api.tools.upsertMany` - Import tools in bulk.
+
+## License
 
 MIT
 
-## 🙏 致谢
+## Credits
 
-- [mahseema/awesome-ai-tools](https://github.com/mahseema/awesome-ai-tools) - 数据源
-- [Convex](https://convex.dev) - 后端服务
-- [Vercel](https://vercel.com) - 部署平台
+- [mahseema/awesome-ai-tools](https://github.com/mahseema/awesome-ai-tools) - Data source
+- [Convex](https://convex.dev) - Backend service
+- [Vercel](https://vercel.com) - Deployment platform

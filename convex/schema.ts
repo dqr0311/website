@@ -3,15 +3,15 @@ import { v } from "convex/values";
 
 export default defineSchema({
   tools: defineTable({
-    name: v.string(),
-    description: v.string(),
-    url: v.string(),
-    category: v.string(),
-    tags: v.array(v.string()),
-    pricing: v.union(v.literal("free"), v.literal("freemium"), v.literal("paid")),
-    image: v.optional(v.string()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
+    name: v.optional(v.any()),
+    description: v.optional(v.any()),
+    url: v.optional(v.any()),
+    category: v.optional(v.any()),
+    tags: v.optional(v.any()),
+    pricing: v.optional(v.any()),
+    image: v.optional(v.any()),
+    createdAt: v.optional(v.any()),
+    updatedAt: v.optional(v.any()),
   })
     .index("by_category", ["category"])
     .index("by_url", ["url"])
