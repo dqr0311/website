@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import SearchBar from "../components/SearchBar";
 import ToolCard from "../components/ToolCard";
+import { sampleTools } from "../lib/sampleData";
 
 type Tool = {
   _id: string;
@@ -25,13 +26,45 @@ type ToolsData = {
   tags: string[];
 };
 
-const EMPTY_DATA: ToolsData = {
-  items: [],
-  page: 1,
-  totalPages: 1,
-  categories: [],
-  tags: [],
-};
+function uniqueSorted(values: string[]) {
+  return [...new Set(values.filter(Boolean))].sort();
+}
+
+function getFallbackData(
+  filters: { search: string; category: string; tag: string },
+  page: number,
+  pageSize: number
+): ToolsData {
+  const search = filters.search.trim().toLowerCase();
+  const category = filters.category.toLowerCase();
+  const tag = filters.tag.toLowerCase();
+  const all = sampleTools.map((tool, index) => ({ ...tool, _id: `sample-${index}` }));
+
+  const filtered = all.filter((tool) => {
+    const matchesSearch =
+      search.length === 0 ||
+      tool.name.toLowerCase().includes(search) ||
+      tool.description.toLowerCase().includes(search);
+    const matchesCategory =
+      category.length === 0 || tool.category.toLowerCase() === category;
+    const matchesTag =
+      tag.length === 0 || tool.tags.some((value) => value.toLowerCase() === tag);
+
+    return matchesSearch && matchesCategory && matchesTag;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const start = (currentPage - 1) * pageSize;
+
+  return {
+    items: filtered.slice(start, start + pageSize),
+    page: currentPage,
+    totalPages,
+    categories: uniqueSorted(all.map((tool) => tool.category)),
+    tags: uniqueSorted(all.flatMap((tool) => tool.tags)),
+  };
+}
 
 export default function Home() {
   const convex = useMemo(
@@ -48,6 +81,7 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     setError("");
+    setData(null);
 
     let timeoutId: number;
     const timeout = new Promise<never>((_, reject) => {
@@ -67,8 +101,8 @@ export default function Home() {
         if (!active) return;
         window.clearTimeout(timeoutId);
         console.error("Failed to load tools", err);
-        setData(EMPTY_DATA);
-        setError("The catalog could not load data right now. Please try again later.");
+        setData(getFallbackData(filters, page, 24));
+        setError("Showing a temporary catalog while the database is unavailable.");
       });
 
     return () => {
@@ -123,7 +157,7 @@ export default function Home() {
           Previous Page
         </button>
         <span className="text-sm">
-          {data ? `${page} / ${data.totalPages}` : "Loading…"}
+          {data ? `${data.page} / ${data.totalPages}` : "Loading…"}
         </span>
         <button
           className="rounded-lg border px-3 py-1 disabled:opacity-50"
