@@ -1,168 +1,195 @@
 "use client";
-import React, { useCallback, useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
 
-type Tool = {
+import { useCallback, useState } from "react";
+import { useMutation } from "convex/react";
+import Link from "next/link";
+import { api } from "../../convex/_generated/api";
+import { parseAwesomeMarkdown } from "../../lib/awesomeParser";
+import { sampleTools } from "../../lib/sampleData";
+
+type ImportTool = {
   name: string;
   description: string;
   url: string;
   category: string;
   tags: string[];
-  pricing: string;
+  pricing: "free" | "freemium" | "paid";
   image?: string;
 };
 
-// 简单解析 mahseema/awesome-ai-tools 的 README.md 列表项：
-//  - [Name](https://url) — description （行内可能带标签/分类，不同 PR 可能略有出入，做兜底即可）
-function parseAwesomeMarkdown(md: string): Tool[] {
-  const lines = md.split("\n");
-  const tools: Tool[] = [];
-
-  const linkRe = /^\s*[-*]\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)\s*[—-]\s*(.+)$/;
-
-  for (const raw of lines) {
-    const m = raw.match(linkRe);
-    if (!m) continue;
-
-    const name = m[1].trim();
-    const url = m[2].trim();
-    const rest = m[3].trim();
-
-    // 简单抽取标签/定价（README 没有统一字段，这里主要兜底）
-    const lower = rest.toLowerCase();
-    const pricing =
-      lower.includes("paid") ? "paid" :
-      lower.includes("freemium") ? "freemium" :
-      "free";
-
-    // 尝试把括号里的逗号分隔当标签（例如 (NLP, Assistant)）
-    const paren = rest.match(/\(([^)]+)\)/);
-    const tags = paren ? paren[1].split(/[，,]/).map(s => s.trim()).filter(Boolean) : [];
-
-    const description = rest.replace(/\s*\([^)]+\)\s*$/, ""); // 去掉末尾括号
-    const category = "Uncategorized";
-
-    tools.push({ name, description, url, category, tags, pricing });
-  }
-
-  // 去重（按 url）
-  const seen = new Set<string>();
-  return tools.filter(t => {
-    if (seen.has(t.url)) return false;
-    seen.add(t.url);
-    return true;
-  });
-}
-
-// 分批，避免参数过大 / 超时
 async function batchImport(
-  upsertMany: (args: { items: Tool[] }) => Promise<{ inserted: number }>,
-  all: Tool[],
+  upsertMany: (args: { items: ImportTool[] }) => Promise<{ inserted: number }>,
+  tools: ImportTool[],
   onChunk?: (imported: number, total: number) => void
 ) {
-  const chunkSize = 100; // 每批 100 个（可调小/大）
+  const chunkSize = 100;
   let imported = 0;
 
-  for (let i = 0; i < all.length; i += chunkSize) {
-    const slice = all.slice(i, i + chunkSize);
+  for (let index = 0; index < tools.length; index += chunkSize) {
+    const slice = tools.slice(index, index + chunkSize);
     const { inserted } = await upsertMany({ items: slice });
     imported += inserted;
-    onChunk?.(imported, all.length);
+    onChunk?.(imported, tools.length);
   }
+}
+
+function normalizeImports(markdown: string): ImportTool[] {
+  return parseAwesomeMarkdown(markdown).map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    url: tool.url,
+    category: tool.category ?? "Uncategorized",
+    tags: tool.tags ?? [],
+    pricing: tool.pricing ?? "free",
+    image: tool.image,
+  }));
 }
 
 export default function AdminPage() {
   const upsertMany = useMutation(api.tools.upsertMany);
-
   const [sourceUrl, setSourceUrl] = useState(
     "https://raw.githubusercontent.com/mahseema/awesome-ai-tools/main/README.md"
   );
   const [loading, setLoading] = useState(false);
-  const [log, setLog] = useState("");
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [log, setLog] = useState<string[]>([]);
 
-  const appendLog = (s: string) => setLog(prev => prev + s + "\n");
-
-  const importFromGithub = useCallback(async () => {
-    try {
-      setLoading(true);
-      setLog("");
-
-      appendLog(`Fetching README: ${sourceUrl}`);
-      const res = await fetch(sourceUrl);
-      if (!res.ok) throw new Error(`Fetch failed: HTTP ${res.status}`);
-      const md = await res.text();
-
-      const parsed = parseAwesomeMarkdown(md);
-      appendLog(`Parsed ${parsed.length} items.`);
-
-      await batchImport(upsertMany, parsed, (done, total) => {
-        appendLog(`Upserted ${done}/${total}`);
-      });
-
-      alert("Import OK! Go check the home page.");
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Import failed";
-      alert(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [sourceUrl, upsertMany]);
-
-  const importSample = async () => {
-    // 你原来的 sample 数据按钮也可以走同一个 upsertMany（不再需要 upsert 单体）
-    const sample: Tool[] = [
-      {
-        name: "ChatGPT",
-        description: "Conversational AI assistant by OpenAI.",
-        url: "https://chat.openai.com/",
-        category: "Assistant",
-        tags: ["NLP", "Assistant"],
-        pricing: "freemium",
-        image: "",
-      },
-      {
-        name: "Hugging Face",
-        description: "Models and datasets hub for ML.",
-        url: "https://huggingface.co",
-        category: "Models",
-        tags: ["Models", "Datasets"],
-        pricing: "free",
-      },
-    ];
-    const { inserted } = await upsertMany({ items: sample });
-    alert(`Imported ${inserted ?? sample.length} items.`);
+  const appendLog = (message: string) => {
+    setLog((previous) => [...previous, message]);
   };
 
+  const runImport = useCallback(
+    async (tools: ImportTool[], label: string, resetLog = true) => {
+      setLoading(true);
+      setStatus("idle");
+      if (resetLog) setLog([]);
+
+      try {
+        appendLog(`Starting ${label} import.`);
+        appendLog(`Prepared ${tools.length} tools.`);
+        await batchImport(upsertMany, tools, (done, total) => {
+          appendLog(`Imported ${done}/${total}.`);
+        });
+        appendLog("Import complete.");
+        setStatus("success");
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Import failed.";
+        appendLog(message);
+        setStatus("error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [upsertMany]
+  );
+
+  const importSample = () => {
+    void runImport(sampleTools, "sample catalog");
+  };
+
+  const importFromGithub = useCallback(async () => {
+    setLoading(true);
+    setStatus("idle");
+    setLog([]);
+
+    try {
+      appendLog(`Fetching ${sourceUrl}`);
+      const response = await fetch(sourceUrl);
+      if (!response.ok) throw new Error(`Fetch failed with HTTP ${response.status}.`);
+
+      const markdown = await response.text();
+      const parsed = normalizeImports(markdown);
+      await runImport(parsed, "GitHub Awesome list", false);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Import failed.";
+      appendLog(message);
+      setStatus("error");
+      setLoading(false);
+    }
+  }, [runImport, sourceUrl]);
+
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12">
-      <h1 className="text-2xl font-bold">Admin (for development)</h1>
+    <main className="min-h-screen bg-neutral-50">
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        <Link href="/" className="text-sm font-medium text-neutral-600 hover:text-neutral-950">
+          Back to catalog
+        </Link>
 
-      <section className="mt-8">
-        <h2 className="text-lg font-semibold">Import sample data</h2>
-        <button disabled={loading} onClick={importSample}
-          className="mt-3 rounded bg-black px-4 py-2 text-white disabled:opacity-50">
-          Import Sample Data
-        </button>
-      </section>
+        <header className="mt-6 border-b border-neutral-200 pb-6">
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+            Catalog operations
+          </p>
+          <h1 className="mt-2 text-3xl font-bold text-neutral-950">Manage imports</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-600">
+            Import curated tools into Convex from bundled sample data or a raw
+            GitHub Awesome list.
+          </p>
+        </header>
 
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold">Import from GitHub</h2>
-        <input
-          value={sourceUrl}
-          onChange={(e) => setSourceUrl(e.target.value)}
-          className="mt-3 w-full rounded border px-3 py-2"
-          placeholder="https://raw.githubusercontent.com/.../README.md"
-        />
-        <button disabled={loading} onClick={importFromGithub}
-          className="mt-3 rounded bg-indigo-600 px-4 py-2 text-white disabled:opacity-50">
-          {loading ? "Importing..." : "Import from GitHub"}
-        </button>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-neutral-950">Sample catalog</h2>
+            <p className="mt-2 text-sm leading-6 text-neutral-600">
+              Seed the database with the same curated tools used by the offline fallback.
+            </p>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={importSample}
+              className="mt-5 h-11 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Import sample data
+            </button>
+          </section>
 
-        <pre className="mt-4 rounded bg-gray-100 p-3 text-sm whitespace-pre-wrap">
-{log}
-        </pre>
-      </section>
+          <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-neutral-950">GitHub Awesome list</h2>
+            <label className="mt-4 block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Raw README URL
+              </span>
+              <input
+                value={sourceUrl}
+                onChange={(event) => setSourceUrl(event.target.value)}
+                className="mt-1 h-11 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-200"
+                placeholder="https://raw.githubusercontent.com/.../README.md"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={importFromGithub}
+              className="mt-5 h-11 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? "Importing..." : "Import from GitHub"}
+            </button>
+          </section>
+        </div>
+
+        <section className="mt-6 rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-neutral-950">Import log</h2>
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                status === "success"
+                  ? "bg-emerald-50 text-emerald-800"
+                  : status === "error"
+                    ? "bg-red-50 text-red-800"
+                    : "bg-neutral-100 text-neutral-600"
+              }`}
+            >
+              {status}
+            </span>
+          </div>
+          <div className="mt-4 min-h-40 rounded-md bg-neutral-950 p-4 font-mono text-xs leading-6 text-neutral-100">
+            {log.length > 0 ? (
+              log.map((line, index) => <p key={`${line}-${index}`}>{line}</p>)
+            ) : (
+              <p className="text-neutral-400">No import activity yet.</p>
+            )}
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

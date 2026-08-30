@@ -99,6 +99,7 @@ export const list = query({
     return {
       items: filtered.slice(start, start + pageSize),
       page,
+      totalItems: filtered.length,
       totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
       categories: uniqueSorted(all.map((tool) => tool.category)),
       tags: uniqueSorted(all.flatMap((tool) => tool.tags)),
